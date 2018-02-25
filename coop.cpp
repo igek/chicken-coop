@@ -135,47 +135,68 @@ float Egg::sell_eggs(unsigned int num) {
 }
 
 // Declare and define chicken_manager
-void chicken_manager(std::list<class Chicken *> ckn_list) {
-  std::chrono::time_point<std::chrono::steady_clock> now;
-  while (ckn_list.size() > 0) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  while (!chicken_mutex.try_lock()) {
-  std::this_thread::sleep_for(std::chrono::microseconds(500));
-  }
-  std::cout << "From chicken_manager thread: " << ckn_list.size()  << std::endl;
-  ckn_list.front()->sell_chickens(ckn_list.front()->count_chickens() - 15);
-  chicken_mutex.unlock();
+void chicken_manager(std::vector<class Chicken *> *ckn_list, std::vector<class Egg *> *eg_list) {
+  while (ckn_list->size() > 0) {
+	class Egg * new_egg = new class Egg();
+	unsigned int total_chickens = 0;
+  	std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  	while (!chicken_mutex.try_lock() && !egg_mutex.try_lock()) {
+  	std::this_thread::sleep_for(std::chrono::microseconds(500));
+  	}
+	std::cout << "From chicken_manager thread: chickens laying eggs." << std::endl;
+	for (std::vector<class Chicken *>::const_iterator it = ckn_list->begin(); it != ckn_list->end(); ++it) {
+		total_chickens += (*it)->count_chickens();
+	}
+	new_egg->set_eggs(total_chickens);
+	new_egg->set_time(std::chrono::steady_clock::now());
+	eg_list->push_back(new_egg);
+	chicken_mutex.unlock();
+	egg_mutex.unlock();
   }
 }
 
 // Declare and define egg_manager
-void egg_manager(std::list<class Egg *> eg_list) {
-  std::chrono::time_point<std::chrono::steady_clock> now;
-  while (eg_list.size() > 0) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  while (!egg_mutex.try_lock()) {
-  std::this_thread::sleep_for(std::chrono::microseconds(500));
-  }
-  std::cout << "From egg_manager thread: " << eg_list.front()->count_eggs() << std::endl;
-  eg_list.front()->set_eggs(eg_list.front()->count_eggs() - 1);
-  egg_mutex.unlock();
+void egg_manager(std::vector<class Chicken *> *ckn_list, std::vector<class Egg *> *eg_list) {
+  while (eg_list->size() > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    while (!chicken_mutex.try_lock() && !egg_mutex.try_lock()) {
+      std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
+    std::cout << "From egg_manager thread: eggs hatching." << std::endl;
+    class Chicken * new_chicken = new class Chicken();
+    eg_list->front()->hatch(new_chicken, std::chrono::steady_clock::now());
+    ckn_list->push_back(new_chicken);
+    eg_list->erase(eg_list->begin());
+    chicken_mutex.unlock();
+    egg_mutex.unlock();
   }
 }
 
 // Declare and define upkeep
-void upkeep(std::list<class Chicken *> ckn_list, std::list<class Egg *> eg_list, float * cash_difference) {
+void upkeep(std::vector<class Chicken *> *ckn_list, std::vector<class Egg *> *eg_list, float * cash_difference) {
   std::chrono::time_point<std::chrono::steady_clock> now;
   while ( *cash_difference > 0 ) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(700));
-  while (!chicken_mutex.try_lock() && !egg_mutex.try_lock()) {
-  std::this_thread::sleep_for(std::chrono::microseconds(500));
-  }
-  if ( ckn_list.front()->count_chickens() > 15 ) {
-  *cash_difference += ckn_list.front()->sell_chickens(ckn_list.front()->count_chickens() - 15);
-  }
-  chicken_mutex.unlock();
-  egg_mutex.unlock();
-  }
+	unsigned int total_chickens = 0;
+	std::this_thread::sleep_for(std::chrono::milliseconds(700));
+	while (!chicken_mutex.try_lock() && !egg_mutex.try_lock()) {
+	std::this_thread::sleep_for(std::chrono::microseconds(500));
+	}
+	for (std::vector<class Chicken *>::const_iterator it = ckn_list->begin(); it != ckn_list->end(); ++it) {
+		total_chickens += (*it)->count_chickens();
+	}
+	while ( total_chickens > 25 ) {
+		if (ckn_list->front()->count_chickens() > 25) { 
+			total_chickens -= ckn_list->front()->count_chickens() - 25;
+			*cash_difference += ckn_list->front()->sell_chickens(ckn_list->front()->count_chickens() - 25);
+		} else {
+			total_chickens -= ckn_list->front()->count_chickens();
+			*cash_difference += ckn_list->front()->sell_chickens(ckn_list->front()->count_chickens());
+			ckn_list->erase(ckn_list->begin());
+		}
+  	}
+	chicken_mutex.unlock();
+	egg_mutex.unlock();
+	}
 }
 
 int main(int argc, char const * argv[]) {
@@ -232,22 +253,14 @@ int main(int argc, char const * argv[]) {
 
   // Setup the threads
   std::thread chicken_thread, egg_thread, upkeep_thread;
-  chicken_thread = std::thread(chicken_manager, *coop);
-  egg_thread = std::thread(egg_manager, *carton);
-  upkeep_thread = std::thread(upkeep, *coop, *carton, &cash_difference);
+  chicken_thread = std::thread(chicken_manager, &chicken_vector, &egg_vector);
+  egg_thread = std::thread(egg_manager, &chicken_vector, &egg_vector);
+  upkeep_thread = std::thread(upkeep, &chicken_vector, &egg_vector, &cash_difference);
 
   // Start the timer
   start_time = std::chrono::steady_clock::now();
 
-  // Do the stuff
-  now = std::chrono::steady_clock::now();
-  diff = now - start_time;
-  class Egg* nweg_ptr = new class Egg();
-  class Chicken* nwchk_ptr = new class Chicken();
-
-         chicken_ptr->lay_eggs(nweg_ptr, now);
-  egg_ptr->hatch(nwchk_ptr, now);
-  std::cout << "Eggs laid!" << std::endl << "Eggs hatched!" << std::endl << "At time: " << diff.count() << std::endl;
+  // Do the stuff now outsourced to the threads
 
   // Join the threads
   chicken_thread.join();
