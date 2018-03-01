@@ -222,7 +222,7 @@ int main(int argc, char const * argv[]) {
   unsigned int starter_chickens, starter_eggs, amount_of_allowable_debt, profit_goal;
   unsigned int days = 0;
   float farm_cash = 0.0;
-  float cash_difference = (float) profit_goal - farm_cash;
+  float cash_difference = 0.0;
 
   // Setup the Accounts
   std::chrono::time_point<std::chrono::steady_clock> start_time, now, end_time;
@@ -254,14 +254,15 @@ int main(int argc, char const * argv[]) {
 
   chicken_vector.push_back(chicken_ptr);
   egg_vector.push_back(egg_ptr);
+  cash_difference = (float)profit_goal - farm_cash;
 
-  std::cout << "Farm setup!" << std::endl << "Chickens: " << chicken_ptr->count_chickens() << std::endl << "Eggs: " << egg_ptr->count_eggs() << std::endl;
+  std::cout << "Farm setup!" << std::endl << "Chickens: " << chicken_ptr->count_chickens() << std::endl << "Eggs: " << egg_ptr->count_eggs() << std::endl << "Profit Goal: " << profit_goal << std::endl << "Allowable debt: " << amount_of_allowable_debt << std::endl;
 
   // Setup the threads
-//  std::thread chicken_thread, egg_thread, upkeep_thread;
-//  chicken_thread = std::thread(chicken_manager, &chicken_vector, &egg_vector);
-//  egg_thread = std::thread(egg_manager, &chicken_vector, &egg_vector);
-//  upkeep_thread = std::thread(upkeep, &chicken_vector, &egg_vector, &cash_difference);
+  //  std::thread chicken_thread, egg_thread, upkeep_thread;
+  //  chicken_thread = std::thread(chicken_manager, &chicken_vector, &egg_vector);
+  //  egg_thread = std::thread(egg_manager, &chicken_vector, &egg_vector);
+  //  upkeep_thread = std::thread(upkeep, &chicken_vector, &egg_vector, &cash_difference);
 
   // Start the timer
   start_time = std::chrono::steady_clock::now();
@@ -275,13 +276,14 @@ int main(int argc, char const * argv[]) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	
 	now = std::chrono::steady_clock::now();
+	diff = now -start_time;
 	diff_chicken = now - prev_chicken;
 	diff_egg = now - prev_egg;
 	diff_sell = now - prev_sell;
 	diff_upkeep = now - prev_upkeep;
 
 	if (diff_chicken >= std::chrono::milliseconds(10)) {
-		std::cout << "Chickens laying eggs..." << std::endl;
+		std::cout << diff.count() << " : Chickens laying eggs..." << std::endl;
 		unsigned int total_chickens = 0;
 		class Egg * new_egg = new class Egg();
 
@@ -294,15 +296,15 @@ int main(int argc, char const * argv[]) {
 		prev_chicken = now;
 	}
 	if (diff_egg >= std::chrono::milliseconds(100)) {
-		std::cout << "Eggs hatching..." << std::endl;
+		std::cout << diff.count() << " : Eggs hatching..." << std::endl;
 		class Chicken * new_chicken = new class Chicken();
 		egg_vector.front()->hatch(new_chicken, now);
 		chicken_vector.push_back(new_chicken);
 		egg_vector.erase(egg_vector.begin());
 		prev_egg = now;
+		days += 1;
 	}
 	if (diff_sell >= std::chrono::milliseconds(25)) {
-		std::cout << "Selling..." << std::endl;
 		unsigned int total_chickens = 0, total_eggs = 0;
 		float revenue_estimate = 0;
 		float cash = 0;
@@ -324,14 +326,21 @@ int main(int argc, char const * argv[]) {
 				farm_cash += cash;
 			} else {
 				unsigned int to_sell = (unsigned int)(cash_difference / 10);
-				std::vector<class Chicken *>::const_iterator it = chicken_vector.begin(), prev_it;
-				
-				while ( to_sell > 0) {
-					to_sell -= (*it)->count_chickens();
-					cash += (*it)->sell_chickens((*it)->count_chickens());
-					prev_it = it;
-					++it;
-					chicken_vector.erase(prev_it);
+
+				for (std::vector<class Chicken *>::const_iterator it = chicken_vector.begin(); it != chicken_vector.end(); ) {
+					if (to_sell > 0) {
+						if (to_sell > (*it)->count_chickens()) {
+							to_sell -= (*it)->count_chickens();
+							cash += (*it)->sell_chickens((*it)->count_chickens());
+							it = chicken_vector.erase(it);
+						} else {
+							cash += (*it)->sell_chickens(to_sell);
+							to_sell = 0;
+							++it;
+						}
+					} else {
+						++it;
+					}
 				}
 				cash_difference -= cash;
 				farm_cash += cash;
@@ -342,40 +351,119 @@ int main(int argc, char const * argv[]) {
 				farm_cash += cash;
 			} else {	
 				unsigned int to_sell = (unsigned int)(cash_difference / 0.25);
-				std::vector<class Egg *>::const_iterator it = egg_vector.begin(), prev_it;
 
-				while (to_sell > 0) {
-					to_sell -= (*it)->count_eggs();
-					cash += (*it)->sell_eggs((*it)->count_eggs());
-					prev_it = it;
-					++it;
-					egg_vector.erase(prev_it);
+				for (std::vector<class Egg *>::const_iterator it = egg_vector.begin(); it != egg_vector.end(); ) {
+					if (to_sell > 0) {
+						if (to_sell > (*it)->count_eggs()) {
+							to_sell -= (*it)->count_eggs();
+							cash += (*it)->sell_eggs((*it)->count_eggs());
+							it = egg_vector.erase(it);
+						} else {
+							cash += (*it)->sell_eggs(to_sell);
+							to_sell = 0;
+							++it;
+						}
+					} else {
+						++it;
+					}
 				}
 			}
+			std::cout << diff.count() << " : Selling..." << std::endl;
 		}
 	}
 	if (diff_upkeep >= std::chrono::milliseconds(700)) {
-		std::cout << "Upkeep..." << std::endl;
+		std::cout << diff.count() << " : Upkeep..." << std::endl;
 		unsigned int total_chickens = 0;
+		unsigned int total_eggs = 0;
 		float cash = 0;
+		float chicken_upkeep_est = 0;
 
 		for (std::vector<class Chicken *>::const_iterator it = chicken_vector.begin(); it != chicken_vector.end(); ++it) {
 			total_chickens += (*it)->count_chickens();
 		}
-		// Sell off excess chickens
+		for (std::vector<class Egg *>::const_iterator it = egg_vector.begin(); it != egg_vector.end(); ++it) {
+			total_eggs += (*it)->count_eggs();
+		}
+
+		// Sell off excess chickens ( > 25)
+		// total_chickens = 25 after this function
 		if (total_chickens > 25) {
 			unsigned int to_sell = total_chickens - 25;
-			std::vector<class Chicken *>::const_iterator it = chicken_vector.begin(), prev_it;
 
-			while (to_sell > 0) {
-				to_sell -= (*it)->count_chickens();
-				cash += (*it)->sell_chickens((*it)->count_chickens());
-				prev_it = it;
-				++it;
-				chicken_vector.erase(prev_it);
+			for (std::vector<class Chicken *>::const_iterator it = chicken_vector.begin(); it != chicken_vector.end(); ) {
+				if (to_sell > 0) {
+					if (to_sell > (*it)->count_chickens()) {
+						to_sell -= (*it)->count_chickens();
+						total_chickens -= (*it)->count_chickens();
+						cash += (*it)->sell_chickens((*it)->count_chickens());
+						it = chicken_vector.erase(it);
+					} else {
+						total_chickens -= to_sell;
+						cash += (*it)->sell_chickens(to_sell);
+						to_sell = 0;
+						++it;
+					}
+				} else {
+					++it;
+				}
 			}
+
 			cash_difference -= cash;
 			farm_cash+= cash;
+		}
+
+		for (unsigned int i = 0; i < total_chickens; i++) {
+			if (i < 5) {
+				chicken_upkeep_est += 2;
+			} else {
+				chicken_upkeep_est += 5*(floor(i/5));
+			}
+		}	
+		// Make sure not to exceed allowable debt
+		// Need to check this, it results in an infinite loop
+		if ( (farm_cash - chicken_upkeep_est - 0.25*total_eggs) < -1*amount_of_allowable_debt) {
+			std::cout << "Welp, you are going to exceeded your debt limit." << std::endl;
+			float debt_diff = (chicken_upkeep_est - 0.25*total_eggs) - (farm_cash + amount_of_allowable_debt);
+			unsigned int chicken_to_sell = (unsigned int)(debt_diff / 10);
+			float cash = 0;
+
+			for (unsigned int i = total_chickens; i >= 0; i--) {
+				std::vector<class Chicken *>::const_iterator it = chicken_vector.begin();
+				float this_time_cash = 0;
+
+				if (debt_diff > 1) {
+					if ( i < 5) {
+						this_time_cash += (*it)->sell_chickens(1);
+						cash += this_time_cash;
+						debt_diff -= 2;
+						total_chickens -= 1;
+					} else {
+						this_time_cash += (*it)->sell_chickens(1);
+						cash += this_time_cash;
+						debt_diff -= 5*(floor(i/5));
+						total_chickens -=1;
+					}
+					if ((*it)->count_chickens() < 1) {
+						it = chicken_vector.erase(it);
+					}
+					debt_diff -= this_time_cash;
+				}
+			}
+			
+			for (unsigned int i = total_eggs; i >= 0; i--) {
+				std::vector<class Egg *>::const_iterator it = egg_vector.begin();
+				float this_time_cash = 0;
+
+				if (debt_diff > 0) {
+					this_time_cash += (*it)->sell_eggs(1);
+					cash += this_time_cash;
+					debt_diff -= 0.25;
+					total_eggs -= 1;
+				}
+				debt_diff -= this_time_cash;
+			}
+			cash_difference -= cash;
+			farm_cash += cash;
 		}
 
 		// Pay for chickens and eggs
@@ -383,19 +471,11 @@ int main(int argc, char const * argv[]) {
 			cash_difference += (*it)->upkeep();
 			farm_cash -= (*it)->upkeep();
 		}
-		for (unsigned int i = 0; i < total_chickens; i++) {
-			if (i < 5) {
-				cash_difference += 2;
-				farm_cash -= 2;
-			} else {
-				cash_difference += 5*(floor(i/5));
-				farm_cash -= 5*(floor(i/5));
-			}
-		}	
-		std::cout << "Cash Difference: $" << cash_difference << std::endl;
-		std::cout << "Farm Cash: $" << farm_cash << std::endl;
+		cash_difference += chicken_upkeep_est;
+		farm_cash -= chicken_upkeep_est;
+		std::cout << diff.count() << " : Cash Difference: $" << cash_difference << std::endl;
+		std::cout << diff.count() << " : Farm Cash: $" << farm_cash << std::endl;
 		prev_upkeep = now;
-		days += 1;
 	}
   }
 
@@ -417,7 +497,7 @@ int main(int argc, char const * argv[]) {
   // Clean up
   end_time = std::chrono::steady_clock::now();
   diff = end_time - start_time;
-  std::cout << "Days to reach goal: " << (unsigned int)(diff / std::chrono::milliseconds(700)) << std::endl;
+  std::cout << "Days to reach goal: " << days << std::endl;
   std::cout << "Run time: " << diff.count() << std::endl;
   write_file.close();
 
