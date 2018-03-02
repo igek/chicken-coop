@@ -423,11 +423,11 @@ int main(int argc, char const * argv[]) {
 		// Need to check this, it results in an infinite loop
 		if ( (farm_cash - chicken_upkeep_est - 0.25*total_eggs) < -1*amount_of_allowable_debt) {
 			std::cout << "Welp, you are going to exceeded your debt limit." << std::endl;
-			float debt_diff = (chicken_upkeep_est - 0.25*total_eggs) - (farm_cash + amount_of_allowable_debt);
+			float debt_diff = (chicken_upkeep_est + 0.25*total_eggs) - (farm_cash + amount_of_allowable_debt);
 			unsigned int chicken_to_sell = (unsigned int)(debt_diff / 10);
 			float cash = 0;
 
-			for (unsigned int i = total_chickens; i >= 0; i--) {
+			for (unsigned int i = total_chickens; i > 0; i--) {
 				std::vector<class Chicken *>::const_iterator it = chicken_vector.begin();
 				float this_time_cash = 0;
 
@@ -450,7 +450,7 @@ int main(int argc, char const * argv[]) {
 				}
 			}
 			
-			for (unsigned int i = total_eggs; i >= 0; i--) {
+			for (unsigned int i = total_eggs; i > 0; i--) {
 				std::vector<class Egg *>::const_iterator it = egg_vector.begin();
 				float this_time_cash = 0;
 
@@ -460,10 +460,15 @@ int main(int argc, char const * argv[]) {
 					debt_diff -= 0.25;
 					total_eggs -= 1;
 				}
+				if ((*it)->count_eggs() < 1) {
+					it = egg_vector.erase(it);
+				}
 				debt_diff -= this_time_cash;
 			}
 			cash_difference -= cash;
 			farm_cash += cash;
+
+			std::cout << "Disaster avoided!" << std::endl << "You were this close to exceeding the debt limit: " << farm_cash << std::endl;
 		}
 
 		// Pay for chickens and eggs
@@ -498,6 +503,9 @@ int main(int argc, char const * argv[]) {
   end_time = std::chrono::steady_clock::now();
   diff = end_time - start_time;
   std::cout << "Days to reach goal: " << days << std::endl;
+  std::cout << "Final chickens: " << final_chickens << std::endl;
+  std::cout << "Final eggs: " << final_eggs << std::endl;
+  std::cout << "Final cash: " << (unsigned int)farm_cash << std::endl;
   std::cout << "Run time: " << diff.count() << std::endl;
   write_file.close();
 
