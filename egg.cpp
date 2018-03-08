@@ -46,7 +46,7 @@ class Chicken * Egg::hatch() {
         std::chrono::duration<double, std::milli> diff = now - spawn_time;
         // Check to make sure that 100ms - 109ms have passed
         // Time should not exceed this window before eggs hatch
-        if (diff.count() >= 100 && diff.count() <= 109) {
+        if (diff.count() >= 100/* && diff.count() <= 109*/) {
                 spawn_time = now;
                 class Chicken * e = new class Chicken(count, now);
                 return e;
